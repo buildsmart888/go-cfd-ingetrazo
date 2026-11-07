@@ -30,6 +30,14 @@ def setup(app):
         stop(app)
 
     menu.addAction("Stop Animated Wind Preview", stop_preview)
+
+    def open_results():
+        open_dialog()
+        dialog = getattr(app.window, "_go_cfd_dialog", None)
+        if dialog is not None:
+            dialog.tabs.setCurrentWidget(dialog.results_tab)
+
+    menu.addAction("CFD Results Viewer (real U/p)...", open_results)
     app.add_menu_action("GO CFD - Wind Lab...", lambda: open_dialog(),
                         tip="Create preliminary CFD cases from selected solid groups.")
     try:

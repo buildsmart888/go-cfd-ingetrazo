@@ -1,3 +1,19 @@
+## v0.3.0-dev — 2026-11-07
+
+- Added W2 real CFD results export with `foamToVTK -latestTime -fields '(U p)'`.
+- Added explicit post-process provenance, real volume/boundary VTK discovery,
+  and refusal to export fields from a solver run that did not complete.
+- Added optional native VTK 3D Qt viewer for velocity streamlines, vertical
+  particle advection along steady streamlines, horizontal U and p slices,
+  pressure on ground/buildings, and surface Cp. Export viewer image as PNG.
+- Converted kinematic OpenFOAM p to physical Pa via `p * rho`; reference Cp
+  uses `2*(p - p_ref_kinematic)/U_ref^2` with outlet p_ref=0 for this case.
+- Added automatic export after a completed solver worker, Qt-free fallback,
+  CLI `export-vtk` and `vtk-info`, VTK fixture regression tests and safety limits.
+- Offline pytest suite: 45/45 PASSED; live VTK Qt host and CFD solver: NOT TESTED.
+- Results remain UNVERIFIED; viewer is a separate IngeTrazo 3D window,
+  NOT a native-viewport overlay or an engineering-approved wind-load module.
+
 # Changelog
 
 ## 0.2.3-dev (2026-11-07)

@@ -24,6 +24,7 @@ from .host_adapter import (
 )
 from .results import load_force_history
 from .runner import SolverRunner, RunCancelled
+from .postprocessing import export_case_vtk, find_latest_vtk
 
 
 class SolverThread(QThread):
@@ -61,15 +62,36 @@ class EnvironmentThread(QThread):
             self.failed.emit(str(exc))
 
 
+class VTKExportThread(QThread):
+    output = Signal(str)
+    completed = Signal(str)
+    failed = Signal(str)
+
+    def __init__(self, case, runner, parent=None):
+        super().__init__(parent)
+        self.case = case
+        self.runner = runner
+
+    def run(self):
+        try:
+            found = export_case_vtk(self.case, self.runner, on_log=self.output.emit)
+            self.completed.emit(str(found.volume_file))
+        except Exception as exc:
+            self.failed.emit(str(exc))
+
+
 class CFDDialog(QDialog):
     def __init__(self, app):
         super().__init__(app.window)
         self.app = app
-        self.setWindowTitle("GO CFD | Preliminary Wind Lab (v0.2.3-dev)")
+        self.setWindowTitle("GO CFD | Preliminary Wind Lab (v0.3.0-dev)")
         self.resize(820, 620)
         self.worker = None
         self.runner = None
         self.env_worker = None
+        self.export_worker = None
+        self._vtk_viewer = None
+        self._auto_export_pending = False
         self.current_case = None
         self.setAttribute(Qt.WA_DeleteOnClose, False)
 
@@ -256,13 +278,73 @@ class CFDDialog(QDialog):
         verify.clicked.connect(self._check_stale)
         buttons.addWidget(verify)
         layout.addLayout(buttons)
+        vtk_buttons = QHBoxLayout()
+        self.export_button = QPushButton("Export CFD fields (foamToVTK)")
+        self.export_button.clicked.connect(self._export_vtk)
+        vtk_buttons.addWidget(self.export_button)
+        self.view_button = QPushButton("Open 3D CFD Results Viewer")
+        self.view_button.clicked.connect(self._open_vtk_viewer)
+        vtk_buttons.addWidget(self.view_button)
+        layout.addLayout(vtk_buttons)
+        self.vtk_state = QLabel(
+            "Computed VTK data required: finish OpenFOAM before export. "
+            "Optional vtk Python package in IngeTrazo; ParaView works for larger jobs."
+        )
+        self.vtk_state.setWordWrap(True)
+        layout.addWidget(self.vtk_state)
         self.results_text = QPlainTextEdit()
         self.results_text.setReadOnly(True)
         layout.addWidget(self.results_text)
         layout.addWidget(QLabel(
-            "Cp contours, ABL, grid convergence and structural-load export are NOT "
-            "implemented in W0. Do not use these values to approve structures."
+            "UNVERIFIED steady RANS fields: no ABL, mesh-independence study, "
+            "peak wind loads or structural design validation."
         ))
+
+    def _export_vtk(self):
+        if self.export_worker is not None and self.export_worker.isRunning():
+            return
+        if self.worker is not None and self.worker.isRunning():
+            QMessageBox.information(self, "GO CFD", "Finish the solver before exporting.")
+            return
+        if self.current_case is None:
+            QMessageBox.warning(self, "GO CFD", "Build and solve a case first")
+            return
+        runner = SolverRunner(self.current_case, backend=self.backend.currentData(),
+                              foam_bashrc=self.bashrc.text())
+        self.export_worker = VTKExportThread(self.current_case, runner, self)
+        self.export_worker.output.connect(self._solver_log)
+        self.export_worker.completed.connect(self._export_complete)
+        self.export_worker.failed.connect(self._export_failed)
+        self.export_button.setEnabled(False)
+        self.vtk_state.setText("Exporting actual OpenFOAM U/p into VTK...")
+        self.export_worker.start()
+
+    def _export_complete(self, filename):
+        self.export_button.setEnabled(True)
+        self.vtk_state.setText("Computed VTK available: " + filename + " | NOT VALIDATED")
+        self.log.appendPlainText("VTK EXPORT OK: " + filename)
+        self.tabs.setCurrentWidget(self.results_tab)
+
+    def _export_failed(self, message):
+        self.export_button.setEnabled(True)
+        self.vtk_state.setText("VTK export failed: " + message)
+        self.log.appendPlainText("VTK EXPORT FAILED: " + message)
+
+    def _open_vtk_viewer(self):
+        if self.current_case is None:
+            QMessageBox.warning(self, "GO CFD", "No case selected")
+            return
+        try:
+            find_latest_vtk(self.current_case)
+            from .vtk_viewer import CFDVTKViewer
+            if self._vtk_viewer is not None:
+                self._vtk_viewer.close()
+            self._vtk_viewer = CFDVTKViewer(self, self.current_case)
+            self._vtk_viewer.show()
+            self._vtk_viewer.raise_()
+            self._vtk_viewer.activateWindow()
+        except Exception as exc:
+            QMessageBox.warning(self, "Open CFD Results Viewer", str(exc))
 
     def _start_preview(self):
         try:
@@ -410,6 +492,7 @@ class CFDDialog(QDialog):
         self.worker.output.connect(self._solver_log)
         self.worker.completed.connect(self._solved)
         self.worker.failed.connect(self._failed)
+        self.worker.finished.connect(self._on_solver_thread_finished)
         self.build_selection.setEnabled(False)
         self.build_cube.setEnabled(False)
         self.run_button.setEnabled(False)
@@ -437,8 +520,16 @@ class CFDDialog(QDialog):
         self.result_state.setText(status + " - convergence and mesh QA NOT VERIFIED")
         self.tabs.setCurrentWidget(self.results_tab)
         self._read_forces()
+        # Export only after the solver thread actually stops (not inside its completed signal).
+        self._auto_export_pending = True
+
+    def _on_solver_thread_finished(self):
+        if self._auto_export_pending:
+            self._auto_export_pending = False
+            self._export_vtk()
 
     def _failed(self, reason):
+        self._auto_export_pending = False
         self._finish()
         self.log.appendPlainText("RUN STOPPED: " + reason)
         self.result_state.setText("CFD run failed/interrupted: " + reason)

@@ -1,3 +1,22 @@
+# GO CFD — Test summary (2026-11-07)
+
+## v0.3.0-dev — CURRENT BASELINE
+
+- `python -m pytest -q`: **45/45 PASSED** (37 previous + 8 additional field and post-process fixture tests).
+- `python -m compileall -q go_cfd`: **PASSED**.
+- VTK-core dataset IO, vector magnitude, pressure and Cp unit conversion,
+  horizontal slices and line-integral velocity streamline extraction: **PASSED**
+  using synthetic, known-valued VTK fixtures — **not** claimed OpenFOAM results.
+- Postprocess export refusal when solver has not completed: **PASSED**.
+- Export process runner and provenance: **PASSED WITH MOCKED PROCESS**, actual `foamToVTK` **NOT TESTED**.
+- Optional native VTK Qt viewer on Windows/IngeTrazo v0.6.0: **NOT TESTED** (PySide6 unavailable to test container).
+- Actual OpenFOAM v2606 WSL2 full 4-stage solve: **NOT TESTED** with v0.3.0; earlier W1 test stopped in blockMesh.
+- GitHub Actions CI: **NOT VERIFIED**, previous runs failed with zero jobs (runner_id=0).
+- Architectural atmospheric boundary layer, grid independence, LES, transient
+  gust design, standard design loads and force-to-structure transfer: **NOT IMPLEMENTED**.
+
+---
+
 # GO CFD - Test results (2026-11-07)
 
 ## Offline Python tests: PASSED (37/37)

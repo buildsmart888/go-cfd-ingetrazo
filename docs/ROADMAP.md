@@ -1,3 +1,16 @@
+# GO CFD — W2 prototype status (2026-11-07)
+
+- [x] W2 code: export U/p with `foamToVTK` (requires a completed real solver run)
+- [x] W2 code: optional VTK Qt viewer; streamlines, pressure contours, velocity slices,
+      building/ground surface pressures and Cp
+- [x] W2 code: units conversion, provenance and stale export checks
+- [x] W2 code: visualization controls (seed count, slice elevation, patch), PNG export
+- [ ] Verify v0.3.0 3D viewer in installed IngeTrazo v0.6.0 + VTK Python bindings
+- [ ] Verify real cube W1 solve and foamToVTK on Ubuntu WSL2 OpenFOAM 2606
+- [ ] Add native IngeTrazo viewport mesh/shader overlay with world-coordinate back-rotation
+- [ ] Finish model-wide CFD envelope generation, validated ABL, mesh sensitivity,
+      experimental benchmarks, wind-standard comparison and structural load mapping
+
 # GO CFD roadmap and verification gates
 
 This is an experimental CFD-to-BIM project, **not a design-certified tool**.

@@ -3,13 +3,40 @@
 > **PRELIMINARY SOFTWARE — NOT FOR STRUCTURAL DESIGN.** This repository is
 > an early implementation, not a validated CFD wind-engineering product.
 
-**Version:** `0.2.3-dev` · **Target IngeTrazo:** `v0.6.0` · **Target OpenFOAM:**
+**Version:** `0.3.0-dev` · **Target IngeTrazo:** `v0.6.0` · **Target OpenFOAM:**
 OpenCFD `v2606` (template target, **not yet solver-tested**).
 
 GO CFD connects selected 3D envelope Groups/Components in IngeTrazo to
 OpenFOAM steady incompressible RANS (`simpleFoam`), using `blockMesh` and
 `snappyHexMesh`. Source BIM geometry is read-only; CFD jobs live in separate
 case directories.
+
+## NEW v0.3.0-dev: real OpenFOAM 3D Results Viewer (W2 prototype)
+
+After a genuine **completed** `blockMesh -> snappyHexMesh -> checkMesh -> simpleFoam`
+case (status remains `SOLVER_COMPLETED_UNVERIFIED`), GO CFD can run `foamToVTK`
+to export the computed `U` and `p` fields. The `4 Results` tab now offers:
+
+- **Export CFD fields (foamToVTK)** — writes actual `VTK/.../internal.vtu`,
+  boundary `*.vtp`, `solver_logs/05_foamToVTK.log` and a provenance record.
+- **Open 3D CFD Results Viewer** — interactive native VTK/Qt window within
+  IngeTrazo; computed velocity streamlines, horizontal U and pressure slices,
+  pressure or Cp colors on building surfaces and ground; moving particles on
+  *steady* velocity paths; export PNG.
+- **No fake CFD data** — missing/partial exports raise clear errors. The older
+  Wind Preview is still a separate, explicitly illustrative overlay.
+
+Viewer requires optional `vtk>=9.3,<10` **in the same Python interpreter that
+runs IngeTrazo**. It is intentionally not bundled in the plugin ZIP. If the
+IngeTrazo Windows EXE has no VTK bindings, open the generated `.vtm` file in
+ParaView instead. See [CFD Viewer setup, limitations, and validation](docs/REAL_CFD_VIEWER.md).
+
+**Currently verified:** offline VTK field math/slices/streamline pipelines and
+Qt-free integration tests. **NOT VERIFIED:** running the real viewer on the
+user's IngeTrazo v0.6.0 build, or completing a live OpenFOAM cube mesh/solve.
+The viewer shows the **wind-aligned CFD coordinate frame**, not yet a result
+mesh back-transformed into the IngeTrazo native viewport. These fields are
+**NOT STRUCTURAL DESIGN WIND LOADS**.
 
 ## What works in this development baseline
 
@@ -88,10 +115,11 @@ wsl -d Ubuntu --exec ls -ld /mnt/c/Users/g_np2/Documents/GO_CFD_Cases
 
 ## Not implemented / not verified
 
-- **No successful live OpenFOAM mesh/solve has been executed yet.** Templates
+- **A successful complete live OpenFOAM mesh/solve is not yet confirmed.** Templates
   must be adapted and validated against the exact installed solver version.
 - No atmospheric boundary layer (ABL), roughness model or empty-domain test.
-- No computed Cp-contour viewer, VTK importer or physical velocity streamlines.
+- Initial computed Cp contours and velocity streamlines are available in an
+  optional native VTK Qt viewer, but NOT validated or yet on the host viewport.
   **Animated Wind Preview is illustrative, not a real CFD animation.**
 - No mesh-independence study, convergence classification, benchmark validation.
 - No cladding peak pressures, internal pressure, gust or terrain code checks.
@@ -156,6 +184,9 @@ No aerodynamic force values are supplied or invented by this project.
 - `go_cfd/wind_preview.py` — Qt-free schematic stream tracks (NOT CFD).
 - `go_cfd/preview_overlay.py` — QPainter animation on the live viewport.
 - `go_cfd/loads.py`, `results.py` — engineering units, force processing.
+- `go_cfd/postprocessing.py` — authentic foamToVTK export and provenance.
+- `go_cfd/vtk_results.py` — real VTK fields, U/p/Cp, slices and traces.
+- `go_cfd/vtk_viewer.py` — optional 3D Qt/VTK results dialog (requires vtk).
 - `docs/` — development plan, validation matrix, safety boundaries.
 - `tests/` — offline pure-Python tests.
 

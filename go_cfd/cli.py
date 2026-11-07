@@ -11,6 +11,7 @@ from .case_builder import build_case
 from .geometry import cube_patch
 from .results import load_force_history
 from .runner import SolverRunner
+from .postprocessing import export_case_vtk, find_latest_vtk
 
 
 def main(argv=None) -> int:
@@ -26,6 +27,12 @@ def main(argv=None) -> int:
     run.add_argument("case_directory", type=Path)
     run.add_argument("--backend", choices=("native", "wsl"), default="native")
     run.add_argument("--foam-bashrc", default="")
+    vtk_export = cmd.add_parser("export-vtk", help="Export real OpenFOAM U/p fields after a completed solver")
+    vtk_export.add_argument("case_directory", type=Path)
+    vtk_export.add_argument("--backend", choices=("native", "wsl"), default="native")
+    vtk_export.add_argument("--foam-bashrc", default="")
+    vtk_info = cmd.add_parser("vtk-info", help="Inspect discovered VTK output; no vtk dependency")
+    vtk_info.add_argument("case_directory", type=Path)
     read = cmd.add_parser("forces", help="Print last forces per patch")
     read.add_argument("case_directory", type=Path)
     args = parser.parse_args(argv)
@@ -45,6 +52,19 @@ def main(argv=None) -> int:
             result = runner.run(on_log=lambda line: print(line, flush=True),
                                 on_stage=lambda s,i,n: print(f"[{i}/{n}] {s}", flush=True))
             print(result)
+        elif args.command == "export-vtk":
+            runner = SolverRunner(args.case_directory, backend=args.backend,
+                                  foam_bashrc=args.foam_bashrc)
+            result = export_case_vtk(args.case_directory, runner,
+                                     on_log=lambda line: print(line, flush=True))
+            print(json.dumps({"volume": str(result.volume_file),
+                              "patches": len(result.boundary_files),
+                              "validation": "NOT_TESTED"}, indent=2))
+        elif args.command == "vtk-info":
+            result = find_latest_vtk(args.case_directory)
+            print(json.dumps({"volume": str(result.volume_file),
+                              "patches": [p.name for p in result.boundary_files],
+                              "validation": "NOT_TESTED"}, indent=2))
         else:
             records = load_force_history(args.case_directory)
             print(json.dumps({name: {"last_force_N": data[-1].force_total_N,

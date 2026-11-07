@@ -15,3 +15,10 @@ local_cases/
 *.foam
 postProcessing/
 solver_logs/
+
+# Binary CFD visualizations are per-case artifacts; never commit solver outputs.
+VTK/
+*.vtm
+*.vtp
+*.vtk.series
+*.foam

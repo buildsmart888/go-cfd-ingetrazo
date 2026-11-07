@@ -45,3 +45,14 @@ CFD-computed streamlines, flow speeds, pressures or force vectors. The overlay
 is strictly non-mutating and holds a snapshot of the current selected bounds;
 restart it after scene edits. Its offline tests cannot certify the installed
 IngeTrazo v0.6.0 GUI or the actual fluid solver.
+
+## W2 visualization caveats (v0.3.0-dev)
+
+The new VTK viewer is **not** an engineering validation gate. It reports
+computed fields exactly as exported but does not demonstrate mesh convergence,
+ABL validity, benchmark comparison, transient gust loads or code-compliant
+cladding pressure. The animated particles travel along steady velocity
+streamlines, not a time-resolved wind simulation. The pressure plot in Pa
+converts OpenFOAM kinematic pressure with case density; Cp uses outlet
+zero-gauge pressure reference in this W1 uniform-inlet case. Native viewport
+integration and coordinate back-rotation are planned, not completed.

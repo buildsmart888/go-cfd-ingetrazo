@@ -74,5 +74,6 @@ def test_plugin_setup_registers_commands_without_qt(monkeypatch):
         "Open GO CFD Wind Lab...",
         "Animated Wind Preview Settings...",
         "Stop Animated Wind Preview",
+        "CFD Results Viewer (real U/p)...",
     ]
     assert len(app.entries) == 1
