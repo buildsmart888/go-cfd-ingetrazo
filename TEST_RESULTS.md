@@ -31,3 +31,10 @@ Coverage includes:
 | Engineering design loads | NOT IMPLEMENTED | Not for structural design |
 
 **A synthetic fake executable test checks orchestration only, not CFD physics.**
+
+## GitHub Actions CI (2026-11-07)
+
+- Full-source run [42347581868](https://github.com/buildsmart888/go-cfd-ingetrazo/actions/runs/42347581868) returned **FAILURE**.
+- Job metadata contains **zero steps** and `runner_id=0`; no job log was available. The job appears to have failed before a runner executed any Python test. Check the Actions run page for GitHub-side runner, billing, or policy messages.
+- Local `python -m pytest -q`: **18/18 PASSED**. This is independent of GitHub Actions.
+- GitHub-hosted CI remains **FAILED / needs investigation** until an actual job runs.
