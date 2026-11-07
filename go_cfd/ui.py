@@ -65,7 +65,7 @@ class CFDDialog(QDialog):
     def __init__(self, app):
         super().__init__(app.window)
         self.app = app
-        self.setWindowTitle("GO CFD | Preliminary Wind Lab (v0.2-dev)")
+        self.setWindowTitle("GO CFD | Preliminary Wind Lab (v0.2.1-dev)")
         self.resize(820, 620)
         self.worker = None
         self.runner = None

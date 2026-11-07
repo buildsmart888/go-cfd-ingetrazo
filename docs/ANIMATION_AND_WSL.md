@@ -80,3 +80,19 @@ Official references:
 - Independent mesh convergence, proper atmospheric boundary layer, solver convergence, experimental benchmark and code load criteria remain required for structural design.
 
 **DO NOT use Preview geometry, colors or motion as evidence of wind loads or structural safety.**
+
+
+## v0.2.1: WSL Windows path conversion
+
+A log showing `wslpath: C:Usersg_np2Documents...` means Windows path separators
+were lost before WSL could translate the case folder.
+The runner now uses `wsl.exe --exec wslpath -u -a` and passes
+`C:/Users/...`. To verify from PowerShell:
+
+```powershell
+$case = 'C:/Users/g_np2/Documents/GO_CFD_Cases/cube_20261107_133927'
+Test-Path $case
+wsl -d Ubuntu --exec wslpath -u -a $case
+```
+
+The real building model still requires a repaired closed external surface.

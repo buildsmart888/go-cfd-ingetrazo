@@ -3,7 +3,7 @@
 > **PRELIMINARY SOFTWARE — NOT FOR STRUCTURAL DESIGN.** This repository is
 > an early implementation, not a validated CFD wind-engineering product.
 
-**Version:** `0.2.0-dev` · **Target IngeTrazo:** `v0.6.0` · **Target OpenFOAM:**
+**Version:** `0.2.1-dev` · **Target IngeTrazo:** `v0.6.0` · **Target OpenFOAM:**
 OpenCFD `v2606` (template target, **not yet solver-tested**).
 
 GO CFD connects selected 3D envelope Groups/Components in IngeTrazo to
@@ -28,6 +28,22 @@ case directories.
 - **NEW v0.2:** Windows defaults to WSL2; environment check diagnoses distro
   startup, OpenFOAM availability and Windows/WSL path mapping before solving.
 - Pytest unit tests; CI workflow (live solver/in-app QA separate).
+
+## Windows WSL path fix (v0.2.1-dev)
+
+The Windows case folder is passed to WSL using `wsl.exe --exec wslpath`
+after normalizing backslashes to forward slashes. This prevents
+`C:\Users\...` from being turned into `C:Users...`.
+
+Check a case directory in PowerShell:
+
+```powershell
+$case = 'C:/Users/g_np2/Documents/GO_CFD_Cases/cube_20261107_133927'
+Test-Path $case
+wsl -d Ubuntu --exec wslpath -u -a $case
+```
+
+This fix does not install OpenFOAM or repair non-watertight surfaces.
 
 ## Not implemented / not verified
 

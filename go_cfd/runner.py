@@ -9,6 +9,7 @@ from pathlib import Path
 from threading import Event
 import json
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -25,6 +26,17 @@ STAGES = (
 
 def _is_windows() -> bool:
     return sys.platform == "win32"
+
+
+def _windows_path_to_wsl_argument(path: str) -> str:
+    """Normalize drive paths without losing separators to shell parsing."""
+    value = str(path)
+    if value.startswith(("\\\\", "//")):
+        raise ValueError("Network/UNC case folders are not supported. Use C:/ or D:/.")
+    if _is_windows() and not re.match(r"^[A-Za-z]:[\\/]", value):
+        raise ValueError("CFD case folder must be an absolute Windows drive path.")
+    return value.replace("\\", "/")
+
 
 
 class RunCancelled(Exception):
@@ -93,11 +105,11 @@ class SolverRunner:
         if not shutil.which("wsl.exe"):
             raise FileNotFoundError(
                 "WSL executable missing. Open PowerShell as Administrator, "
-                "run 'wsl --install -d Ubuntu-22.04' and restart Windows.")
+                "run 'wsl --list --online', then install a listed Ubuntu distribution.")
 
         # Check Ubuntu startup BEFORE attempting wslpath so 4294967295
         # becomes a useful diagnostic rather than an opaque CalledProcessError.
-        boot = self._capture(["wsl.exe", "--", "bash", "-lc",
+        boot = self._capture(["wsl.exe", "--exec", "bash", "-lc",
                               'printf "GO_CFD_WSL_READY"'])
         if boot.returncode or "GO_CFD_WSL_READY" not in boot.stdout:
             detail = (boot.stderr or boot.stdout or "").strip()[-320:]
@@ -105,17 +117,18 @@ class SolverRunner:
                 f"WSL could not launch Ubuntu (exit {boot.returncode}). "
                 "In PowerShell run: wsl --status; wsl --list --verbose. "
                 "If no Ubuntu WSL2 distro is installed, use an Administrator "
-                "PowerShell: wsl --install -d Ubuntu-22.04; restart and launch "
-                "Ubuntu once to create its Linux account. "
+                "PowerShell: wsl --list --online, install a listed Ubuntu, "
+                "then launch it once to create a Linux account. "
                 f"Details: {detail}")
 
-        convert = self._capture(["wsl.exe", "--", "wslpath", "-a",
-                                 str(self.case_dir)])
+        # Avoid default shell escape removal (C:\Users becomes C:Users).
+        convert = self._capture(["wsl.exe", "--exec", "wslpath", "-u", "-a",
+                                 _windows_path_to_wsl_argument(str(self.case_dir))])
         linux_case = convert.stdout.strip()
         if convert.returncode or not linux_case.startswith("/"):
             raise RuntimeError(
                 "WSL started but could not translate the Windows case folder. "
-                "Use a local drive-backed folder (e.g. Documents/GO_CFD_Cases). "
+                "Use an existing local drive-backed folder (e.g. C:/Users/.../Documents/GO_CFD_Cases). "
                 + (convert.stderr or convert.stdout or "")[-250:])
         self._wsl_case = linux_case
 
@@ -124,7 +137,7 @@ class SolverRunner:
             if not self.foam_bashrc.startswith("/"):
                 raise ValueError("OpenFOAM bashrc must be an absolute Linux path")
             probe = self._capture([
-                "wsl.exe", "--", "bash", "-lc",
+                "wsl.exe", "--exec", "bash", "-lc",
                 '. "$1" >/dev/null 2>&1 && for tool in blockMesh snappyHexMesh checkMesh simpleFoam; do command -v "$tool" >/dev/null 2>&1 || exit 127; done; command -v blockMesh',
                 "bash", self.foam_bashrc])
             if probe.returncode:
@@ -152,7 +165,7 @@ for f in /opt/openfoam*/etc/bashrc /usr/lib/openfoam/*/etc/bashrc; do
   fi
 done
 exit 127'''
-            probe = self._capture(["wsl.exe", "--", "bash", "-lc", shell_probe])
+            probe = self._capture(["wsl.exe", "--exec", "bash", "-lc", shell_probe])
             if probe.returncode:
                 raise FileNotFoundError(
                     "WSL Ubuntu is working but OpenFOAM 'blockMesh' was not "
@@ -178,9 +191,9 @@ exit 127'''
             if not self._wsl_case:
                 self.preflight()
             if self._resolved_bashrc:
-                return ["wsl.exe", "--", "bash", "-lc", '. "$1"; shift; exec "$@"',
+                return ["wsl.exe", "--exec", "bash", "-lc", '. "$1"; shift; exec "$@"',
                         "bash", self._resolved_bashrc, program, "-case", self._wsl_case, *extra]
-            return ["wsl.exe", "--", "bash", "-lc", 'exec "$@"',
+            return ["wsl.exe", "--exec", "bash", "-lc", 'exec "$@"',
                     "bash", program, "-case", self._wsl_case, *extra]
         raise ValueError("backend must be native or wsl")
 

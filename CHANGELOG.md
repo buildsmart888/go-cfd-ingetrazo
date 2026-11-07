@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.1-dev (2026-11-07)
+
+- Fixed Windows-to-WSL path conversion with --exec and forward slashes.
+- Added regression checks for paths with spaces and UNC paths.
+- The CFD solver and model topology still require separate validation.
+
+
 ## 0.2.0-dev (2026-11-07)
 
 - Added animated Wind Preview overlay with 3D wind paths, moving particles,
