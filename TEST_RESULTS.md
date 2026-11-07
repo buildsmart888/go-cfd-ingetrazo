@@ -1,6 +1,6 @@
 # GO CFD - Test results (2026-11-07)
 
-## Offline Python tests: PASSED (28/28)
+## Offline Python tests: PASSED (33/33)
 
 Command: `python -m pytest -q`
 
@@ -25,11 +25,11 @@ Coverage includes:
 | System | Status | Evidence |
 |---|---|---|
 | Python source syntax | PASSED | `python -m compileall -q go_cfd` |
-| Offline math, geometry, case generation | PASSED | pytest, 28 tests |
+| Offline math, geometry, case generation | PASSED | pytest, 33 tests |
 | IngeTrazo v0.6.0 installed-host v0.1 | USER SCREENSHOT | Menu/toolbar/dialog visible in user's screenshot; solver blocked |
 | IngeTrazo v0.6.0 installed-host v0.2 | NOT TESTED | New animation UI not yet tried on Windows |
 | Qt GUI (real pixels) / screenshot | NOT TESTED | PySide6 unavailable in runner; fake QPainter test passed |
-| OpenFOAM v2606 mesh / solver | NOT TESTED | `blockMesh`, `snappyHexMesh`, `simpleFoam` unavailable |
+| OpenFOAM v2606 mesh / solver | USER TEST: FAILED AT blockMesh (139) | `blockMesh`, `snappyHexMesh`, `simpleFoam` unavailable |
 | WSL2 backend | MOCKED PASS / LIVE NOT TESTED | Simulated failure and success paths; actual Windows WSL unavailable |
 | Cp map / contours | NOT IMPLEMENTED | Future stage |
 | ABL / domain / mesh independence | NOT IMPLEMENTED / NOT TESTED | Validation gate |
@@ -41,5 +41,19 @@ Coverage includes:
 
 - Full-source run [42347581868](https://github.com/buildsmart888/go-cfd-ingetrazo/actions/runs/42347581868) returned **FAILURE**.
 - Job metadata contains **zero steps** and `runner_id=0`; no job log was available. The job appears to have failed before a runner executed any Python test. Check the Actions run page for GitHub-side runner, billing, or policy messages.
-- Local `python -m pytest -q`: **28/28 PASSED**. This is independent of GitHub Actions.
+- Local `python -m pytest -q`: **33/33 PASSED**. This is independent of GitHub Actions.
 - GitHub-hosted CI remains **FAILED / needs investigation** until an actual job runs.
+
+## v0.2.2-dev: blockMesh exit 139 investigation
+
+The user's live WSL2/OpenFOAM v2606 output showed `ENV CHECK OK` but
+`blockMesh exited with code 139` before the mesh stage finished. Source review
+found the solver launcher sourcing `etc/bashrc` with positional parameters
+that included its own path. Some OpenFOAM bashrc files interpret positional
+arguments as files to source, causing recursive sourcing and Bash SIGSEGV.
+
+The launcher now isolates the arguments with a Bash array and clears
+`$@` before sourcing. Added three regression tests, including two actual
+Bash subprocess tests. The existing suite passes **33/33 offline tests**.
+
+**Live v0.2.2-dev WSL/OpenFOAM run: NOT TESTED YET.** Results are not design-ready.

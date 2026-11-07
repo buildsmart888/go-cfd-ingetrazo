@@ -16,6 +16,21 @@ import subprocess
 import sys
 from typing import Callable
 
+# OpenFOAM etc/bashrc may read/supply shell positional arguments as files.
+# Sourcing with $1 still set to the bashrc path can re-source itself until
+# bash crashes with SIGSEGV/exit 139. Copy the solver argv and CLEAR "$@"
+# before sourcing. Keep arguments as a Bash array; no shell=True or eval.
+_SOURCE_AND_EXEC = (
+    'foamrc=$1; shift; go_cfd_argv=("$@"); set --; '
+    '. "$foamrc"; exec "${go_cfd_argv[@]}"'
+)
+_SOURCE_AND_PROBE = (
+    'foamrc=$1; set --; . "$foamrc" >/dev/null 2>&1; '
+    'for tool in blockMesh snappyHexMesh checkMesh simpleFoam; do '
+    'command -v "$tool" >/dev/null 2>&1 || exit 127; '
+    'done; command -v blockMesh'
+)
+
 STAGES = (
     ("blockMesh", ()),
     ("snappyHexMesh", ("-overwrite",)),
@@ -29,14 +44,18 @@ def _is_windows() -> bool:
 
 
 def _windows_path_to_wsl_argument(path: str) -> str:
-    """Normalize drive paths without losing separators to shell parsing."""
+    """Pass native drive paths to wslpath without shell-escaping backslashes.
+
+    wsl.exe --exec skips the default Linux shell. Forward-slash Windows paths
+    also prevent accidental Bash backslash consumption on WSL variants.
+    The actual WSL mount root is resolved by wslpath, not hard-coded here.
+    """
     value = str(path)
     if value.startswith(("\\\\", "//")):
         raise ValueError("Network/UNC case folders are not supported. Use C:/ or D:/.")
     if _is_windows() and not re.match(r"^[A-Za-z]:[\\/]", value):
         raise ValueError("CFD case folder must be an absolute Windows drive path.")
     return value.replace("\\", "/")
-
 
 
 class RunCancelled(Exception):
@@ -121,14 +140,16 @@ class SolverRunner:
                 "then launch it once to create a Linux account. "
                 f"Details: {detail}")
 
-        # Avoid default shell escape removal (C:\Users becomes C:Users).
+        # Windows backslashes were stripped by the default WSL shell on some
+        # machines (C:\Users\... became C:Users...). --exec and forward
+        # slashes bypass shell interpretation and let wslpath detect mounts.
         convert = self._capture(["wsl.exe", "--exec", "wslpath", "-u", "-a",
                                  _windows_path_to_wsl_argument(str(self.case_dir))])
         linux_case = convert.stdout.strip()
         if convert.returncode or not linux_case.startswith("/"):
             raise RuntimeError(
                 "WSL started but could not translate the Windows case folder. "
-                "Use an existing local drive-backed folder (e.g. C:/Users/.../Documents/GO_CFD_Cases). "
+                "Use an existing local drive-backed case folder (e.g. C:/Users/.../Documents/GO_CFD_Cases). "
                 + (convert.stderr or convert.stdout or "")[-250:])
         self._wsl_case = linux_case
 
@@ -138,8 +159,7 @@ class SolverRunner:
                 raise ValueError("OpenFOAM bashrc must be an absolute Linux path")
             probe = self._capture([
                 "wsl.exe", "--exec", "bash", "-lc",
-                '. "$1" >/dev/null 2>&1 && for tool in blockMesh snappyHexMesh checkMesh simpleFoam; do command -v "$tool" >/dev/null 2>&1 || exit 127; done; command -v blockMesh',
-                "bash", self.foam_bashrc])
+                _SOURCE_AND_PROBE, "bash", self.foam_bashrc])
             if probe.returncode:
                 raise RuntimeError(
                     "Ubuntu starts, but OpenFOAM blockMesh was not found using "
@@ -158,6 +178,7 @@ if all_tools; then
 fi
 for f in /opt/openfoam*/etc/bashrc /usr/lib/openfoam/*/etc/bashrc; do
   if [ -f "$f" ]; then
+    set --
     . "$f" >/dev/null 2>&1
     if all_tools; then
       printf 'BASHRC:%s' "$f"; exit 0
@@ -182,7 +203,7 @@ exit 127'''
     def _commands(self, program: str, extra: tuple[str, ...]) -> list[str]:
         if self.backend == "native":
             if self.foam_bashrc:
-                return ["bash", "-lc", '. "$1"; shift; exec "$@"', "bash",
+                return ["bash", "-lc", _SOURCE_AND_EXEC, "bash",
                         self.foam_bashrc, program, "-case", str(self.case_dir), *extra]
             if not shutil.which(program):
                 raise FileNotFoundError(f"{program} not on PATH; configure OpenFOAM environment")
@@ -191,7 +212,7 @@ exit 127'''
             if not self._wsl_case:
                 self.preflight()
             if self._resolved_bashrc:
-                return ["wsl.exe", "--exec", "bash", "-lc", '. "$1"; shift; exec "$@"',
+                return ["wsl.exe", "--exec", "bash", "-lc", _SOURCE_AND_EXEC,
                         "bash", self._resolved_bashrc, program, "-case", self._wsl_case, *extra]
             return ["wsl.exe", "--exec", "bash", "-lc", 'exec "$@"',
                     "bash", program, "-case", self._wsl_case, *extra]
@@ -245,6 +266,13 @@ exit 127'''
                     code = self.process.wait()
                     self.process = None
                     if code != 0:
+                        if code in (139, -11):
+                            raise RuntimeError(
+                                f"{program} crashed (SIGSEGV / exit 139). "
+                                f"See {logs / f'{number:02d}_{program}.log'}; "
+                                "OpenFOAM startup or its native libraries failed. "
+                                "Verify blockMesh -help inside Ubuntu."
+                            )
                         raise RuntimeError(f"{program} exited with code {code}; inspect solver_logs")
             self._status("SOLVER_COMPLETED_UNVERIFIED", reason="Mesh and convergence QA not completed")
             return "SOLVER_COMPLETED_UNVERIFIED"

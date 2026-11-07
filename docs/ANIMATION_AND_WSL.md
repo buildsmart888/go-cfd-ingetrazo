@@ -81,13 +81,15 @@ Official references:
 
 **DO NOT use Preview geometry, colors or motion as evidence of wind loads or structural safety.**
 
+## v0.2.1 WSL path-conversion fix
 
-## v0.2.1: WSL Windows path conversion
+The Windows user's log `wslpath: C:Usersg_np2Documents...` indicates that
+backslashes in a Windows case path were consumed before `wslpath` saw them.
+The runner now uses `wsl.exe --exec wslpath -u -a` with a forward-slash path
+`C:/Users/...` so the default Linux shell cannot remove separators. This fix
+is independent of whether OpenFOAM has been installed inside Ubuntu.
 
-A log showing `wslpath: C:Usersg_np2Documents...` means Windows path separators
-were lost before WSL could translate the case folder.
-The runner now uses `wsl.exe --exec wslpath -u -a` and passes
-`C:/Users/...`. To verify from PowerShell:
+In PowerShell, verify the *existing* case directory:
 
 ```powershell
 $case = 'C:/Users/g_np2/Documents/GO_CFD_Cases/cube_20261107_133927'
@@ -95,4 +97,24 @@ Test-Path $case
 wsl -d Ubuntu --exec wslpath -u -a $case
 ```
 
-The real building model still requires a repaired closed external surface.
+If the command returns an absolute `/mnt/c/...` path, Windows/WSL path
+conversion is working. If it still fails, verify the WSL drive mount with
+`wsl -d Ubuntu --exec ls -ld /mnt/c/Users/g_np2/Documents/GO_CFD_Cases`.
+If `Test-Path` is false, regenerate the sample cube case before running.
+
+Separately, `open_edges` and `nonmanifold_edges` on Group 3 mean its surface
+is not closed or includes topologically conflicting faces. Do not suppress
+watertight screening. Build/select a separate closed **exterior-only** shell
+before attempting a mesh on a real building.
+
+## v0.2.2: blockMesh exit 139 after environment readiness
+
+The previous launcher sourced OpenFOAM etc/bashrc with positional arguments
+still set, potentially causing recursive self-sourcing and Bash SIGSEGV (139).
+The patched launcher saves the argv array, clears positional arguments with
+`set --` before sourcing, and executes the preserved solver arguments.
+This applies to WSL and native Linux launchers and explicit bashrc preflight.
+
+If a crash remains, inspect `solver_logs/01_blockMesh.log`. Test `blockMesh -help`
+in Ubuntu; success there but failure on a GO CFD case needs inspection of the
+case dictionary or mount. No structural design results are validated by this fix.

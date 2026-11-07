@@ -1,11 +1,21 @@
 # Changelog
 
+## 0.2.2-dev (2026-11-07)
+
+- Fix SIGSEGV/exit 139 caused by sourcing OpenFOAM etc/bashrc with positional arguments still present.
+- Clear positional parameters before sourcing in native and WSL solver launchers and explicit bashrc preflight.
+- Add runtime Bash integration regression tests and SIGSEGV error hint.
+- Live OpenFOAM runtime still requires user verification and case validation.
+
 ## 0.2.1-dev (2026-11-07)
 
-- Fixed Windows-to-WSL path conversion with --exec and forward slashes.
-- Added regression checks for paths with spaces and UNC paths.
-- The CFD solver and model topology still require separate validation.
-
+- Fixed Windows/WSL case-path conversion: use direct `wsl.exe --exec wslpath`
+  and normalize `C:\\Users\\...` to `C:/Users/...` before crossing into Linux.
+- All WSL process launches now use `--exec` to avoid the default shell
+  silently consuming Windows path separators.
+- Added regression tests for drive paths, spaces, and UNC path rejection.
+- Still requires an installed OpenFOAM solver and a valid closed external
+  CFD envelope; this patch does not change fluid physics or mesh QA.
 
 ## 0.2.0-dev (2026-11-07)
 

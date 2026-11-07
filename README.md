@@ -3,7 +3,7 @@
 > **PRELIMINARY SOFTWARE — NOT FOR STRUCTURAL DESIGN.** This repository is
 > an early implementation, not a validated CFD wind-engineering product.
 
-**Version:** `0.2.1-dev` · **Target IngeTrazo:** `v0.6.0` · **Target OpenFOAM:**
+**Version:** `0.2.2-dev` · **Target IngeTrazo:** `v0.6.0` · **Target OpenFOAM:**
 OpenCFD `v2606` (template target, **not yet solver-tested**).
 
 GO CFD connects selected 3D envelope Groups/Components in IngeTrazo to
@@ -29,21 +29,34 @@ case directories.
   startup, OpenFOAM availability and Windows/WSL path mapping before solving.
 - Pytest unit tests; CI workflow (live solver/in-app QA separate).
 
-## Windows WSL path fix (v0.2.1-dev)
+## OpenFOAM launch fix (v0.2.2-dev)
 
-The Windows case folder is passed to WSL using `wsl.exe --exec wslpath`
-after normalizing backslashes to forward slashes. This prevents
-`C:\Users\...` from being turned into `C:Users...`.
+After WSL and OpenFOAM were detected, `blockMesh` could exit 139 even on a
+valid Cube case. The launcher was sourcing OpenFOAM `etc/bashrc` while the
+script arguments were still present. Some OpenFOAM versions interpret these
+arguments as files to source, which can recursively source `etc/bashrc`
+until a segmentation fault. v0.2.2 captures the intended solver command,
+clears `$@` using `set --`, then sources the bashrc and executes the saved
+command. Explicit WSL bashrc preflight uses the same protection.
 
-Check a case directory in PowerShell:
+If the error persists, check `solver_logs/01_blockMesh.log`, test
+`blockMesh -help` in Ubuntu and compare native Linux filesystem vs `/mnt/c`.
+This is a process launch fix, not CFD validation.
+
+### WSL path fix (v0.2.1)
+
+For Windows drive-backed case folders, the runner now passes a forward-slash
+Windows path through `wsl.exe --exec wslpath -u -a`, avoiding shell removal of
+backslashes. This fixes the preflight failure displaying
+`wslpath: C:Users...` for case folders stored under `C:\Users\...`.
+The fix does **not** install OpenFOAM or repair open/non-manifold BIM geometry.
+
+From PowerShell you may verify case paths independently:
 
 ```powershell
-$case = 'C:/Users/g_np2/Documents/GO_CFD_Cases/cube_20261107_133927'
-Test-Path $case
-wsl -d Ubuntu --exec wslpath -u -a $case
+wsl -d Ubuntu --exec wslpath -u -a 'C:/Users/g_np2/Documents/GO_CFD_Cases'
+wsl -d Ubuntu --exec ls -ld /mnt/c/Users/g_np2/Documents/GO_CFD_Cases
 ```
-
-This fix does not install OpenFOAM or repair non-watertight surfaces.
 
 ## Not implemented / not verified
 
