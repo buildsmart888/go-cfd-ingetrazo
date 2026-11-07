@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "go-cfd-ingetrazo"
+version = "0.1.0.dev0"
+description = "Experimental wind CFD extension for IngeTrazo"
+requires-python = ">=3.12"
+license = {text = "GPL-3.0-or-later"}
+authors = [{name = "GO Engineering"}]
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[tool.setuptools.packages.find]
+include = ["go_cfd*"]
