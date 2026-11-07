@@ -36,3 +36,12 @@
 Cp contours/streamlines, load transfer, code loads, wind tunnel comparison,
 and any certification are **NOT IMPLEMENTED / NOT TESTED**. Do not label these
 as accepted or passed based solely on a green Python CI run.
+
+
+## v0.2 preview boundary (2026-11-07)
+
+Animated overlay paths are constructed around a bounding proxy. They are NOT
+CFD-computed streamlines, flow speeds, pressures or force vectors. The overlay
+is strictly non-mutating and holds a snapshot of the current selected bounds;
+restart it after scene edits. Its offline tests cannot certify the installed
+IngeTrazo v0.6.0 GUI or the actual fluid solver.

@@ -1,38 +1,54 @@
-# GO CFD Engineering Roadmap
+# GO CFD roadmap and verification gates
 
-## W0 — Extension foundation
-- [x] Repository created and initial commit
-- [ ] Confirm clean installation of development package into IngeTrazo v0.6.0
-- [ ] Verify toolbar, menu, dialog, selection, and project switching
-- [ ] Capture app screenshot and traceback-free startup test
+This is an experimental CFD-to-BIM project, **not a design-certified tool**.
+Every item below requires its own independent evidence before being marked
+ready for engineering use.
 
-## W1 — Geometry and solver
-- [ ] Validate cube STL orientation, watertightness, edge/manifold diagnostics
-- [ ] Generate meshable OpenFOAM domain and surface names
-- [ ] Run actual blockMesh, snappyHexMesh, checkMesh and simpleFoam
-- [ ] Review residuals, continuity, and force output
-- [ ] Conduct empty-domain and low-Re reference checks
+## W0 — Host and geometry
 
-## W2 — Building shapes
-- [ ] House: gable and hip roofs, eaves and wall zones
-- [ ] Factory: framing and cladding surfaces
-- [ ] Sign boards, freestanding walls, porous walls
-- [ ] Cooling towers and curved structures
+- [x] IngeTrazo v0.6.0 plugin with menus, toolbar and 4-tab dialog (host startup observed in user screenshots for v0.1)
+- [x] Extract read-only selected Groups/Components in world-space, triangulate and screen topology
+- [x] Generate case files without modifying original BIM elements
+- [x] Detect geometry and parameter staleness (manual check)
+- [x] Animated Wind Preview (**illustrative only**, v0.2)
+- [ ] v0.2 Preview real-host screenshot and no-traceback QA
+- [ ] Test Undo, selection and multi-document persistence across representative saved models
 
-## W3 — Structural coupling
-- [ ] Map pressure patches to BIM identity (UID and face references)
-- [ ] Preserve force and moment balance across mapping
-- [ ] Export loads to GO Structural Analysis using explicit load cases
-- [ ] Manage model hash and stale results
+## W1 — OpenFOAM runtime
 
-## W4 — Validated CFD and design
-- [ ] Atmospheric boundary layer and terrain roughness
-- [ ] Mesh independence and wind-direction sweeps
-- [ ] Cp benchmarks and uncertainty / repeatability
-- [ ] Peak/cladding pressures and code comparisons
-- [ ] Engineering review: do not mark results design-ready before validation
+- [x] Generate a preliminary cube case and all relevant dictionaries (not solver-validated)
+- [x] Native and WSL2 process orchestration; safe cancellation and logs
+- [x] WSL/OpenFOAM preflight with useful diagnostics and no OS modifications
+- [ ] Install/test actual pinned OpenFOAM-v2606 executable in WSL2
+- [ ] blockMesh → snappyHexMesh → checkMesh → simpleFoam **real run**
+- [ ] Document mesh QA, residuals, forces and momentum balance
+- [ ] Resolve any runtime dictionary/mesh errors on real solver
 
-## Status convention
+## W2 — Fluid results rendering
 
-PASSED = tested against stated evidence; FAILED = demonstrated defect;
-NOT TESTED = no runtime evidence; NOT IMPLEMENTED = absent feature.
+- [ ] OpenFOAM velocity field U and pressure p reader (VTK/ParaView pipeline)
+- [ ] Physical streamlines and particle advection **derived from solver field**
+- [ ] Surface Cp pressure map with color legend, patch/face correspondence
+- [ ] Distinguish steady visualization from transient animation
+- [ ] Benchmark cube, roof, wall and sign geometry with verified reference data
+
+## W3 — Structure integration
+
+- [ ] Pressure-to-BIM facade/roof patch identity and coordinate mappings
+- [ ] Conservative force/moment integration and structural distribution
+- [ ] Validated GO Structural Analysis exchange with load combinations
+- [ ] Model-change invalidation for computed CFD fields and structural exports
+
+## W4 — CFD wind engineering
+
+- [ ] Atmospheric boundary layer, terrain/roughness, code wind speed and direction sweeps
+- [ ] Mesh independence, turbulence sensitivity and experimental validation
+- [ ] Transient solver support for gusts / vortex shedding when justified
+- [ ] Design-code checks and engineer review before any load may be used for design
+
+### State of evidence (2026-11-07)
+
+- Python offline: 28/28 PASSED including mock WSL and mock Qt overlay.
+- Real v0.2 Qt GUI: NOT TESTED (PySide6 unavailable in execution environment).
+- Real OpenFOAM: NOT TESTED (executables unavailable in execution environment).
+- Latest GitHub Actions in prior push: failed before runner steps; investigate platform-side status separately from Python tests.

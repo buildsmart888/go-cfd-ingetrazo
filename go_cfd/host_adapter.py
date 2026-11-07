@@ -45,3 +45,24 @@ def source_patches_from_selection(scene) -> tuple[Patch, ...]:
     if not patches:
         raise ValueError("Selection has no usable 3D faces")
     return tuple(patches)
+
+
+def preview_bounds_from_selection(scene):
+    """World-space AABB for *illustration*, even for imperfect CFD surfaces.
+
+    The host's selection_bounds respects transformed components and avoids
+    triangulating/retagging an entire building. This is only sampled when the
+    user explicitly starts or refreshes the preview.
+    """
+    if not selected_groups(scene):
+        raise ValueError("Select at least one visible model Group/Component for Wind Preview")
+    low, high = scene.selection_bounds()
+    if low is None or high is None:
+        raise ValueError("Selected groups have no geometric bounds")
+
+    def tup(point):
+        if callable(getattr(point, "x", None)):
+            return (float(point.x()), float(point.y()), float(point.z()))
+        return tuple(float(v) for v in point)
+
+    return tup(low), tup(high)

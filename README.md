@@ -3,7 +3,7 @@
 > **PRELIMINARY SOFTWARE — NOT FOR STRUCTURAL DESIGN.** This repository is
 > an early implementation, not a validated CFD wind-engineering product.
 
-**Version:** `0.1.0-dev` · **Target IngeTrazo:** `v0.6.0` · **Target OpenFOAM:**
+**Version:** `0.2.0-dev` · **Target IngeTrazo:** `v0.6.0` · **Target OpenFOAM:**
 OpenCFD `v2606` (template target, **not yet solver-tested**).
 
 GO CFD connects selected 3D envelope Groups/Components in IngeTrazo to
@@ -22,6 +22,11 @@ case directories.
 - Launch local Linux OpenFOAM or WSL2 processes, record logs, cancel.
 - Read the latest forces.dat by patch, inspect force/moment units.
 - Geometry and parameter fingerprints, explicit result freshness check.
+- **NEW v0.2:** animated, non-CFD viewport wind preview in IngeTrazo (moving
+  schematic paths/particles, line density, direction and animation speed).
+  This is a model-scale illustration only, independent of OpenFOAM.
+- **NEW v0.2:** Windows defaults to WSL2; environment check diagnoses distro
+  startup, OpenFOAM availability and Windows/WSL path mapping before solving.
 - Pytest unit tests; CI workflow (live solver/in-app QA separate).
 
 ## Not implemented / not verified
@@ -29,7 +34,8 @@ case directories.
 - **No successful live OpenFOAM mesh/solve has been executed yet.** Templates
   must be adapted and validated against the exact installed solver version.
 - No atmospheric boundary layer (ABL), roughness model or empty-domain test.
-- No Cp-contour viewer, VTK importer, post-processed velocity streamlines.
+- No computed Cp-contour viewer, VTK importer or physical velocity streamlines.
+  **Animated Wind Preview is illustrative, not a real CFD animation.**
 - No mesh-independence study, convergence classification, benchmark validation.
 - No cladding peak pressures, internal pressure, gust or terrain code checks.
 - No automated line/nodal load transfer into GO Structural Analysis.
@@ -44,7 +50,11 @@ case directories.
 4. Restart IngeTrazo; choose **Extensions -> GO CFD**.
 5. Select a *closed external building envelope*, not structural framing mixed
    with walls, then create a case. You can also build the sample cube.
-6. OpenFOAM is **not bundled**. Install separately and configure PATH or WSL.
+6. To see moving wind without OpenFOAM: **GO CFD > 2 Wind > Start Wind Preview**;
+   the dialog hides so you see the animated overlay on the 3D viewport.
+7. For actual CFD: OpenFOAM is **not bundled**. Install separately and use
+   **Check WSL / OpenFOAM environment** before running.
+8. See [Animated Wind Preview & Windows setup](docs/ANIMATION_AND_WSL.md).
 
 Manual alternative: copy the single `go_cfd` package into
 `%APPDATA%\ingetrazo\plugins\go_cfd` on Windows. On Linux:
@@ -85,7 +95,9 @@ No aerodynamic force values are supplied or invented by this project.
 - `go_cfd/host_adapter.py` — world-space selected BIM geometry.
 - `go_cfd/geometry.py` — STL, surface diagnostics, traceability.
 - `go_cfd/case_model.py`, `case_builder.py` — CFD scenario and dictionaries.
-- `go_cfd/runner.py` — external OpenFOAM stages and logs.
+- `go_cfd/runner.py` — external OpenFOAM stages, preflight and logs.
+- `go_cfd/wind_preview.py` — Qt-free schematic stream tracks (NOT CFD).
+- `go_cfd/preview_overlay.py` — QPainter animation on the live viewport.
 - `go_cfd/loads.py`, `results.py` — engineering units, force processing.
 - `docs/` — development plan, validation matrix, safety boundaries.
 - `tests/` — offline pure-Python tests.

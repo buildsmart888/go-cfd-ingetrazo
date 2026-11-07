@@ -70,5 +70,9 @@ def test_plugin_setup_registers_commands_without_qt(monkeypatch):
     monkeypatch.delitem(sys.modules, 'PySide6.QtWidgets', raising=False)
     app = _App()
     setup(app)
-    assert len(app.menu.actions) == 1
+    assert [name for name, _ in app.menu.actions] == [
+        "Open GO CFD Wind Lab...",
+        "Animated Wind Preview Settings...",
+        "Stop Animated Wind Preview",
+    ]
     assert len(app.entries) == 1

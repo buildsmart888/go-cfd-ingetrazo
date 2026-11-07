@@ -3,13 +3,14 @@ from __future__ import annotations
 
 from datetime import datetime
 import json
+import sys
 from pathlib import Path
 
 from PySide6.QtCore import QThread, Signal
 from PySide6.QtWidgets import (
     QApplication, QComboBox, QDialog, QDoubleSpinBox, QFileDialog,
     QFormLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit,
-    QMessageBox, QPlainTextEdit, QProgressBar, QPushButton,
+    QMessageBox, QPlainTextEdit, QProgressBar, QPushButton, QSpinBox,
     QTabWidget, QVBoxLayout, QWidget,
 )
 from PySide6.QtGui import QDesktopServices
@@ -18,7 +19,9 @@ from PySide6.QtCore import QUrl, Qt
 from .case_model import WindConfig, is_stale
 from .case_builder import build_case
 from .geometry import cube_patch, geometry_hash, inspect_surface
-from .host_adapter import selected_groups, source_patches_from_selection
+from .host_adapter import (
+    selected_groups, source_patches_from_selection, preview_bounds_from_selection,
+)
 from .results import load_force_history
 from .runner import SolverRunner, RunCancelled
 
@@ -43,14 +46,30 @@ class SolverThread(QThread):
             self.failed.emit(str(exc))
 
 
+class EnvironmentThread(QThread):
+    ready = Signal(str)
+    failed = Signal(str)
+
+    def __init__(self, runner, parent=None):
+        super().__init__(parent)
+        self.runner = runner
+
+    def run(self):
+        try:
+            self.ready.emit(self.runner.preflight())
+        except Exception as exc:
+            self.failed.emit(str(exc))
+
+
 class CFDDialog(QDialog):
     def __init__(self, app):
         super().__init__(app.window)
         self.app = app
-        self.setWindowTitle("GO CFD | Preliminary Wind Lab (v0.1-dev)")
+        self.setWindowTitle("GO CFD | Preliminary Wind Lab (v0.2-dev)")
         self.resize(820, 620)
         self.worker = None
         self.runner = None
+        self.env_worker = None
         self.current_case = None
         self.setAttribute(Qt.WA_DeleteOnClose, False)
 
@@ -130,6 +149,38 @@ class CFDDialog(QDialog):
         layout.addRow(QLabel(
             "Uniform inlet; NO atmospheric boundary layer or code wind-pressure method yet."
         ))
+        box = QGroupBox("Animated Wind Preview — NO OpenFOAM needed")
+        preview_layout = QVBoxLayout(box)
+        preview_tip = QLabel(
+            "Draws moving flow lines and particles around the selected model "
+            "in the IngeTrazo viewport. ILLUSTRATIVE ONLY: not a CFD velocity "
+            "field, pressure contour, Cp or structural load. Works for open models too."
+        )
+        preview_tip.setWordWrap(True)
+        preview_layout.addWidget(preview_tip)
+        controls = QFormLayout()
+        self.preview_density = QSpinBox()
+        self.preview_density.setRange(8, 64)
+        self.preview_density.setValue(24)
+        self.preview_rate = self._spin(10, " x", 1, 1.0)
+        self.preview_rate.setRange(0.1, 10.0)
+        controls.addRow("Flow line count", self.preview_density)
+        controls.addRow("Animation speed", self.preview_rate)
+        preview_layout.addLayout(controls)
+        preview_buttons = QHBoxLayout()
+        self.start_preview_btn = QPushButton("Start Wind Preview (hide dialog)")
+        self.start_preview_btn.clicked.connect(self._start_preview)
+        self.stop_preview_btn = QPushButton("Stop Wind Preview")
+        self.stop_preview_btn.clicked.connect(self._stop_preview)
+        preview_buttons.addWidget(self.start_preview_btn)
+        preview_buttons.addWidget(self.stop_preview_btn)
+        preview_layout.addLayout(preview_buttons)
+        self.preview_note = QLabel(
+            "To stop after hiding this window: Extensions > GO CFD > Stop Animated Wind Preview."
+        )
+        self.preview_note.setWordWrap(True)
+        preview_layout.addWidget(self.preview_note)
+        layout.addRow(box)
 
     def _build_run_tab(self):
         layout = QVBoxLayout(self.run_tab)
@@ -144,11 +195,21 @@ class CFDDialog(QDialog):
         self.backend = QComboBox()
         self.backend.addItem("Native Linux / installed OpenFOAM", "native")
         self.backend.addItem("Windows WSL2", "wsl")
+        if sys.platform == "win32":
+            self.backend.setCurrentIndex(1)
         form.addRow("Solver backend", self.backend)
         self.bashrc = QLineEdit()
         self.bashrc.setPlaceholderText("Optional: e.g. /opt/openfoam2606/etc/bashrc")
         form.addRow("OpenFOAM bashrc (if needed)", self.bashrc)
         layout.addLayout(form)
+        self.check_button = QPushButton("Check WSL / OpenFOAM environment")
+        self.check_button.clicked.connect(self._check_environment)
+        layout.addWidget(self.check_button)
+        self.env_status = QLabel(
+            "Solver must run separately. On Windows select WSL2 and install Ubuntu + OpenFOAM."
+        )
+        self.env_status.setWordWrap(True)
+        layout.addWidget(self.env_status)
         row = QHBoxLayout()
         self.build_selection = QPushButton("Build case from selected model")
         self.build_selection.clicked.connect(lambda: self._build_case("model"))
@@ -203,6 +264,54 @@ class CFDDialog(QDialog):
             "implemented in W0. Do not use these values to approve structures."
         ))
 
+    def _start_preview(self):
+        try:
+            cfg = self._config()
+            lo, hi = preview_bounds_from_selection(self.app.scene)
+            from .preview_overlay import controller_for
+            ctrl = controller_for(self.app)
+            ctrl.start(self.app.scene, lo, hi, cfg.direction_to_deg,
+                       count=self.preview_density.value(),
+                       speed=self.preview_rate.value())
+            self.preview_note.setText(
+                "RUNNING - illustrative moving lines only, NOT CFD. "
+                "Reopen GO CFD from the toolbar to change settings. "
+                "Use Extensions > GO CFD > Stop Animated Wind Preview to stop."
+            )
+            self.hide()  # Reveal the IngeTrazo viewport and animated overlay.
+        except Exception as exc:
+            QMessageBox.warning(self, "Wind Preview", str(exc))
+
+    def _stop_preview(self):
+        from .preview_overlay import stop_preview
+        stop_preview(self.app)
+        self.preview_note.setText("Preview stopped. No CFD solution was calculated.")
+
+    def _check_environment(self):
+        if self.env_worker is not None and self.env_worker.isRunning():
+            return
+        runner = SolverRunner(
+            self.current_case or Path(self.case_root.text()),
+            backend=self.backend.currentData(),
+            foam_bashrc=self.bashrc.text(),
+        )
+        self.env_worker = EnvironmentThread(runner, self)
+        self.env_worker.ready.connect(self._environment_ready)
+        self.env_worker.failed.connect(self._environment_failed)
+        self.check_button.setEnabled(False)
+        self.env_status.setText("Checking runtime (not running a CFD case)...")
+        self.env_worker.start()
+
+    def _environment_ready(self, message):
+        self.check_button.setEnabled(True)
+        self.env_status.setText("READY TO TRY SOLVER (not CFD-validated): " + message)
+        self.log.appendPlainText("ENV CHECK OK: " + message)
+
+    def _environment_failed(self, message):
+        self.check_button.setEnabled(True)
+        self.env_status.setText("SOLVER ENVIRONMENT NOT READY: " + message)
+        self.log.appendPlainText("ENV CHECK FAILED: " + message)
+
     def _choose_folder(self):
         p = QFileDialog.getExistingDirectory(self, "CFD output parent folder", self.case_root.text())
         if p:
@@ -236,7 +345,20 @@ class CFDDialog(QDialog):
                 screening = inspect_surface(patches)
                 self.log.appendPlainText("Geometry screening: " + json.dumps(screening))
                 if not screening["watertight_candidate"]:
-                    raise ValueError("Selected envelope not watertight; fix geometry before meshing")
+                    for patch in patches:
+                        single = inspect_surface((patch,))
+                        self.log.appendPlainText(
+                            f"  {patch.name}: open={single['open_edges']}, "
+                            f"nonmanifold={single['nonmanifold_edges']}, "
+                            f"orientation={single['inconsistent_orientation_edges']}"
+                        )
+                    raise ValueError(
+                        "Selected envelope is not watertight. Remove intersecting "
+                        "interior parts / duplicate faces and repair gaps, or create "
+                        "an independent closed EXTERIOR envelope for CFD. "
+                        "You can still view illustrative moving wind now: "
+                        "go to '2 Wind' > Start Wind Preview."
+                    )
                 base = Path(self.case_root.text()).expanduser()
                 name = ("cube" if source == "cube" else "selected") + "_" + datetime.now().strftime("%Y%m%d_%H%M%S")
                 target = base / name
