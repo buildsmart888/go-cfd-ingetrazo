@@ -1,13 +1,13 @@
 """GO CFD: IngeTrazo 0.6.0 extension entry point.
 
-Host and Qt imports are deliberately deferred.
+The plugin remains importable without Qt/OpenFOAM. Host imports are deferred.
 """
 from __future__ import annotations
 from .constants import VERSION, PROJECT_NAME
 
 
 def setup(app):
-    """Register extension commands without mutating the model on startup."""
+    """Register extension commands. Never mutate the model on setup."""
     def open_dialog():
         from .ui import CFDDialog
         dialog = getattr(app.window, "_go_cfd_dialog", None)
@@ -34,4 +34,5 @@ def setup(app):
         action.setToolTip("GO CFD - Wind & Structural Aerodynamics")
         app.window.addToolBar(toolbar)
     except (ImportError, AttributeError, RuntimeError, TypeError):
+        # The menu remains usable even in a host build without toolbar hooks.
         pass

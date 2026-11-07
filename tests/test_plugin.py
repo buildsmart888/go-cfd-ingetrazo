@@ -1,26 +1,29 @@
-"""Host registration smoke tests for staged GO CFD plugin."""
+"""IngeTrazo plugin-loader registration without a GUI dependency."""
 from go_cfd import setup
 
 
 class FakeMenu:
     def __init__(self):
         self.actions = []
-    def addAction(self, name, callback):
-        self.actions.append((name, callback))
+
+    def addAction(self, title, callback):
+        self.actions.append((title, callback))
 
 
 class FakeApp:
     def __init__(self):
         self.menu = FakeMenu()
         self.actions = []
+
     def add_menu(self, title):
         self.title = title
         return self.menu
-    def add_menu_action(self, text, callback, **kwargs):
-        self.actions.append(text)
+
+    def add_menu_action(self, title, callback, **kwargs):
+        self.actions.append(title)
 
 
-def test_plugin_registers_actions():
+def test_plugin_registers_menu_without_qt():
     app = FakeApp()
     setup(app)
     assert app.title == "GO CFD"

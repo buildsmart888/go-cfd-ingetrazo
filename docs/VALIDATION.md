@@ -1,25 +1,38 @@
-# Validation requirements
+# Engineering Validation Gate (unpassed)
 
-## Non-negotiable release gate
+## Evidence levels
 
-This project is experimental and does not currently generate certified design wind loads.
+- `PASSED (OFFLINE)`: Python tests with deterministic data only.
+- `NOT TESTED (HOST)`: IngeTrazo v0.6.0 GUI, file load and scene export not exercised.
+- `NOT TESTED (SOLVER)`: No installed OpenFOAM v2606 executable run.
+- `NOT TESTED (ENGINEERING)`: No published wind-tunnel comparisons, no mesh study.
 
-1. **Geometry:** watertight triangulated solid, consistent outward normals, correct units in metres, no self-intersections or zero-area triangles.
-2. **Solver:** run on an actual pinned OpenFOAM distribution; checkMesh must report valid mesh; residual and mass-balance criteria documented.
-3. **Boundary conditions:** inlet, outlet, ground and top/sides must be physically appropriate to the case. Atmospheric boundary layer is required for realistic external building wind engineering.
-4. **Sensitivity:** multiple mesh refinements and numerical-scheme sensitivity evaluated.
-5. **Benchmark:** compare Cp, forces and moments with recognized experiments or validated reference results.
-6. **Load mapping:** integrated pressure traction must equal mapped structural forces/moments within declared tolerances.
-7. **Wind standards:** CFD cannot silently replace site wind climate, peak factors, internal pressure, local roof zones or mandatory code requirements.
-8. **Staleness:** change to source geometry, wind setup, solver version or mesh settings invalidates downstream results.
-9. **Units:** incompressible OpenFOAM `p` is kinematic pressure; multiply by fluid density to obtain Pa. Record pressure reference.
+## Required next-run experiments
 
-## Test status (2026-11-07)
+1. **Host smoke:** clean IngeTrazo v0.6.0 plugin installation. Open dialog,
+   select a cube, build case, Save/Reload `.igz`, check paths and undo integrity.
+2. **Input geometry:** cube dimensions in metres, normals, shared edges,
+   outward orientation and no duplicate internal faces.
+3. **OpenFOAM syntax:** source OpenCFD v2606 environment; run `blockMesh`,
+   `snappyHexMesh -overwrite`, `checkMesh`, `simpleFoam` using the generated case.
+   Inspect full logs and boundary-field compatibility; record exact version.
+4. **Domain sensitivity:** 5H/15H baseline is heuristic, not a validation.
+   Confirm blockage ratio and domain extents with actual geometry.
+5. **Mesh refinement:** at least 3 densities; compare force, moment, local Cp,
+   convergence, residuals and grid metrics.
+6. **Velocity/pressure physics:** ensure empty-domain flow profile is stable.
+   Uniform inlet here is preliminary, not ABL.
+7. **External benchmarks:** compare cube and cooling tower mean Cp and force
+   histories against credible wind-tunnel measurements at equivalent Re.
+8. **Pressure units:** verify incompressible pressure-to-Pa conversion, force
+   object density settings, sign and reference values.
+9. **Structural transfer:** future stage must conserve total F and M from CFD
+   patches to structural shells/frames, with explicit tolerance and missing faces.
+10. **Engineering review:** no use of mean Cp as peak design pressure; verify
+    exposure, internal pressure, gust factors, applicable Thai standards.
 
-- Offline Python unit tests for complete local source archive: PASSED 17/17
-- Host integration IngeTrazo v0.6.0: NOT TESTED
-- Qt GUI offscreen testing: NOT TESTED
-- Live OpenFOAM checkMesh and flow: NOT TESTED
-- Cp contours / ABL / design loads: NOT IMPLEMENTED
+## Explicit missing outputs
 
-No wind-load results are presented as validated.
+Cp contours/streamlines, load transfer, code loads, wind tunnel comparison,
+and any certification are **NOT IMPLEMENTED / NOT TESTED**. Do not label these
+as accepted or passed based solely on a green Python CI run.

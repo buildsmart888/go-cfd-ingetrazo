@@ -1,48 +1,113 @@
 # GO CFD — Wind & Structural Aerodynamics for IngeTrazo
 
-**Development preview: v0.1.0-dev | Target: IngeTrazo v0.6.0 | OpenFOAM: OpenCFD v2606**
+> **PRELIMINARY SOFTWARE — NOT FOR STRUCTURAL DESIGN.** This repository is
+> an early implementation, not a validated CFD wind-engineering product.
 
-> This is an early engineering prototype. **NOT FOR STRUCTURAL DESIGN.** A successful CFD solver run does not validate design loads.
+**Version:** `0.1.0-dev` · **Target IngeTrazo:** `v0.6.0` · **Target OpenFOAM:**
+OpenCFD `v2606` (template target, **not yet solver-tested**).
 
-## Project goals
+GO CFD connects selected 3D envelope Groups/Components in IngeTrazo to
+OpenFOAM steady incompressible RANS (`simpleFoam`), using `blockMesh` and
+`snappyHexMesh`. Source BIM geometry is read-only; CFD jobs live in separate
+case directories.
 
-- Export selected BIM envelope Groups/Components from IngeTrazo as triangulated, world-space STL.
-- Diagnose open/non-manifold/degenerate surfaces before meshing.
-- Define CFD wind speed and direction, density, and computational domain.
-- Build OpenFOAM steady incompressible RANS cases (blockMesh, snappyHexMesh, simpleFoam).
-- Read simulation logs and surface-force outputs, with explicit UNVERIFIED / STALE results.
-- Later: Cp contours and streamlines, ABL, mesh-independence validation, local and global design pressures and load transfer to GO Structural Analysis.
+## What works in this development baseline
 
-## Current implementation and availability
+- `Extensions -> GO CFD -> Open GO CFD Wind Lab...` and a toolbar action.
+- Select Groups/Components; convert world-space faces to patch-preserving STL.
+- Check for degenerate faces, unmatched edges and non-manifold edges.
+- Specify wind *flow-to* angle, speed, density and background cell size.
+- Write a preliminary, uniform-inflow OpenFOAM case to a **new** folder.
+- Build a closed 1 x 1 x 1 m cube case without IngeTrazo.
+- Launch local Linux OpenFOAM or WSL2 processes, record logs, cancel.
+- Read the latest forces.dat by patch, inspect force/moment units.
+- Geometry and parameter fingerprints, explicit result freshness check.
+- Pytest unit tests; CI workflow (live solver/in-app QA separate).
 
-The **complete development source archive** was provided separately in this ChatGPT conversation, along with an IngeTrazo plugin ZIP. The initial GitHub upload is being staged. The repository may not yet contain every source file from that archive.
+## Not implemented / not verified
 
-Full source download is available in the earlier conversation attachment named `GO_CFD_IngeTrazo_Source_v0.1.0-dev.zip`.
+- **No successful live OpenFOAM mesh/solve has been executed yet.** Templates
+  must be adapted and validated against the exact installed solver version.
+- No atmospheric boundary layer (ABL), roughness model or empty-domain test.
+- No Cp-contour viewer, VTK importer, post-processed velocity streamlines.
+- No mesh-independence study, convergence classification, benchmark validation.
+- No cladding peak pressures, internal pressure, gust or terrain code checks.
+- No automated line/nodal load transfer into GO Structural Analysis.
+- No fluid-structure interaction or validated LES.
+- No safety/design certification. Solver success remains `UNVERIFIED`.
 
-### Install from full source archive
+## Install IngeTrazo extension (Windows)
 
-1. Extract the provided source archive.
+1. Download and extract this repository.
 2. Close IngeTrazo v0.6.0.
-3. Run `install_windows.cmd` from the extracted archive, or copy its `go_cfd` directory to `%APPDATA%\ingetrazo\plugins\go_cfd`.
-4. Restart IngeTrazo; open Extensions > GO CFD.
-5. Install and configure OpenFOAM separately. It is not bundled.
+3. Run `install_windows.cmd` (backs up an older `go_cfd` plugin).
+4. Restart IngeTrazo; choose **Extensions -> GO CFD**.
+5. Select a *closed external building envelope*, not structural framing mixed
+   with walls, then create a case. You can also build the sample cube.
+6. OpenFOAM is **not bundled**. Install separately and configure PATH or WSL.
 
-### Offline tests from full source archive
+Manual alternative: copy the single `go_cfd` package into
+`%APPDATA%\ingetrazo\plugins\go_cfd` on Windows. On Linux:
+`~/.local/share/ingetrazo/plugins/go_cfd`.
+
+## Command-line test without IngeTrazo
+
+From the repository root with Python 3.12+:
 
 ```bash
 python -m pip install -e '.[test]'
-python -m pytest -q
+python -m pytest
 python -m go_cfd.cli demo-cube ./local_cases/cube_01 --speed-ms 20
+# If you have OpenCFD v2606 installed and environment sourced:
+python -m go_cfd.cli run ./local_cases/cube_01 --backend native
+python -m go_cfd.cli forces ./local_cases/cube_01
 ```
 
-The baseline's offline tests passed 17/17 on 2026-11-07. Installed IngeTrazo GUI and real OpenFOAM solver runs remain **NOT TESTED**.
+The `demo-cube` command creates input dictionaries but does not run the solver.
+No aerodynamic force values are supplied or invented by this project.
 
-## Source integration / development
+## Coordinate conventions
 
-IngeTrazo's extension loader discovers package directories under `%APPDATA%\ingetrazo\plugins`; package-level `setup(app)` is the host entry point. Keep Qt and IngeTrazo imports inside GUI/host modules so numerical modules are independently testable.
+- All source and CFD geometry units are **metres**.
+- World frame: IngeTrazo X/Y/Z, with +Z up.
+- `direction_to_deg=0` means air **moves to +world-X**, 90 towards +world-Y.
+  This is **not** meteorological wind-from bearing.
+- Before exporting STL, model XY is rotated by `-direction_to_deg` to make
+  incoming air flow along +CFD-X.
+- OpenFOAM incompressible `p` is kinematic pressure (m2/s2); multiply by air
+  density for Pa. `Cp=(p_surface-p_ref)/(0.5*rho*U_ref^2)`.
+- Positive net pressure acts **into** a surface; suction acts outward.
 
-### Validation gate
+## Project layout
 
-Before using pressures for structural analysis, require watertight geometry, appropriate flow domain and ABL boundary conditions, mesh and time-step convergence as applicable, reference benchmark comparisons, pressure integration checks, and code-specific design factors.
+- `go_cfd/__init__.py` — IngeTrazo plugin API setup.
+- `go_cfd/ui.py` — Qt UI + asynchronous solver worker.
+- `go_cfd/host_adapter.py` — world-space selected BIM geometry.
+- `go_cfd/geometry.py` — STL, surface diagnostics, traceability.
+- `go_cfd/case_model.py`, `case_builder.py` — CFD scenario and dictionaries.
+- `go_cfd/runner.py` — external OpenFOAM stages and logs.
+- `go_cfd/loads.py`, `results.py` — engineering units, force processing.
+- `docs/` — development plan, validation matrix, safety boundaries.
+- `tests/` — offline pure-Python tests.
 
-**Developer:** GO Engineering / buildsmart888
+## Source repository and development updates
+
+The complete, inspectable Python implementation and offline unit tests are
+maintained at [buildsmart888/go-cfd-ingetrazo](https://github.com/buildsmart888/go-cfd-ingetrazo).
+The ZIP download includes a package-shaped plugin and independent Python CLI.
+If making changes from a source ZIP on Windows, `publish_github.ps1` can stage
+and push changes through an authenticated `git clone`, without rewriting Git
+history or creating an unrelated root commit. Review any changes before push.
+
+
+## Provenance and safety
+
+Input geometry is hashed. A new case may never overwrite existing solver
+results. Any model/settings change invalidates previous input signatures; use
+**Check if model changed** prior to interpreting results. Changes in turbulence
+model, domain or solver version also warrant a rerun even if the source geometry
+matches. The quick edge-count check is not a full watertightness/intersection
+certificate. Model-only testing, live IngeTrazo testing, actual CFD solver
+runs, and independent engineering validation are separately tracked.
+
+License: GPL-3.0-or-later. OpenFOAM and IngeTrazo retain their own licenses.
