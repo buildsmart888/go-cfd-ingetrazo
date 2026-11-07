@@ -64,8 +64,8 @@ def test_wsl_launcher_preserves_source_clear_and_case_args(tmp_path: Path):
     runner = SolverRunner(tmp_path, backend="wsl", foam_bashrc="/usr/lib/openfoam/openfoam2606/etc/bashrc")
     runner._wsl_case = "/mnt/c/GO_CFD_Cases/cube_1"
     cmd = runner._commands("blockMesh", ())
-    assert cmd[:4] == ["wsl.exe", "--exec", "bash", "-lc"]
-    assert cmd[4] == _SOURCE_AND_EXEC
-    assert "set --" in cmd[4]
+    assert cmd[:6] == ["wsl.exe", "--cd", "/", "--exec", "bash", "-lc"]
+    assert cmd[6] == _SOURCE_AND_EXEC
+    assert "set --" in cmd[6]
     assert cmd[-3:] == ["blockMesh", "-case", "/mnt/c/GO_CFD_Cases/cube_1"]
-    assert cmd[6] == "/usr/lib/openfoam/openfoam2606/etc/bashrc"
+    assert cmd[8] == "/usr/lib/openfoam/openfoam2606/etc/bashrc"

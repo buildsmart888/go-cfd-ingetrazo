@@ -58,6 +58,16 @@ def _windows_path_to_wsl_argument(path: str) -> str:
     return value.replace("\\", "/")
 
 
+def _wsl_exec(*argv: str) -> list[str]:
+    """Start WSL in Linux / regardless of the Windows caller's cwd.
+
+    An IngeTrazo installation path can be C:/Program Files/IngeTrazo.
+    Letting WSL inherit that cwd makes OpenFOAM reject its spaces even when
+    -case points to a different, valid case. --cd / is supported by WSL2.
+    """
+    return ["wsl.exe", "--cd", "/", "--exec", *argv]
+
+
 class RunCancelled(Exception):
     pass
 
@@ -128,8 +138,8 @@ class SolverRunner:
 
         # Check Ubuntu startup BEFORE attempting wslpath so 4294967295
         # becomes a useful diagnostic rather than an opaque CalledProcessError.
-        boot = self._capture(["wsl.exe", "--exec", "bash", "-lc",
-                              'printf "GO_CFD_WSL_READY"'])
+        boot = self._capture(_wsl_exec("bash", "-lc",
+                                       'printf "GO_CFD_WSL_READY"'))
         if boot.returncode or "GO_CFD_WSL_READY" not in boot.stdout:
             detail = (boot.stderr or boot.stdout or "").strip()[-320:]
             raise RuntimeError(
@@ -143,23 +153,29 @@ class SolverRunner:
         # Windows backslashes were stripped by the default WSL shell on some
         # machines (C:\Users\... became C:Users...). --exec and forward
         # slashes bypass shell interpretation and let wslpath detect mounts.
-        convert = self._capture(["wsl.exe", "--exec", "wslpath", "-u", "-a",
-                                 _windows_path_to_wsl_argument(str(self.case_dir))])
+        convert = self._capture(_wsl_exec(
+            "wslpath", "-u", "-a",
+            _windows_path_to_wsl_argument(str(self.case_dir))))
         linux_case = convert.stdout.strip()
         if convert.returncode or not linux_case.startswith("/"):
             raise RuntimeError(
                 "WSL started but could not translate the Windows case folder. "
                 "Use an existing local drive-backed case folder (e.g. C:/Users/.../Documents/GO_CFD_Cases). "
                 + (convert.stderr or convert.stdout or "")[-250:])
+        if any(ch.isspace() for ch in linux_case):
+            raise ValueError(
+                "OpenFOAM case path contains whitespace, which OpenFOAM may "
+                "reject as an invalid fileName. Set Case root folder to "
+                "C:/GO_CFD_Cases (no spaces), then build a NEW cube case."
+            )
         self._wsl_case = linux_case
 
         if self.foam_bashrc:
             # User-specified absolute Linux bashrc, never interpolated into shell.
             if not self.foam_bashrc.startswith("/"):
                 raise ValueError("OpenFOAM bashrc must be an absolute Linux path")
-            probe = self._capture([
-                "wsl.exe", "--exec", "bash", "-lc",
-                _SOURCE_AND_PROBE, "bash", self.foam_bashrc])
+            probe = self._capture(_wsl_exec(
+                "bash", "-lc", _SOURCE_AND_PROBE, "bash", self.foam_bashrc))
             if probe.returncode:
                 raise RuntimeError(
                     "Ubuntu starts, but OpenFOAM blockMesh was not found using "
@@ -186,7 +202,7 @@ for f in /opt/openfoam*/etc/bashrc /usr/lib/openfoam/*/etc/bashrc; do
   fi
 done
 exit 127'''
-            probe = self._capture(["wsl.exe", "--exec", "bash", "-lc", shell_probe])
+            probe = self._capture(_wsl_exec("bash", "-lc", shell_probe))
             if probe.returncode:
                 raise FileNotFoundError(
                     "WSL Ubuntu is working but OpenFOAM 'blockMesh' was not "
@@ -212,10 +228,11 @@ exit 127'''
             if not self._wsl_case:
                 self.preflight()
             if self._resolved_bashrc:
-                return ["wsl.exe", "--exec", "bash", "-lc", _SOURCE_AND_EXEC,
-                        "bash", self._resolved_bashrc, program, "-case", self._wsl_case, *extra]
-            return ["wsl.exe", "--exec", "bash", "-lc", 'exec "$@"',
-                    "bash", program, "-case", self._wsl_case, *extra]
+                return _wsl_exec("bash", "-lc", _SOURCE_AND_EXEC,
+                                 "bash", self._resolved_bashrc, program,
+                                 "-case", self._wsl_case, *extra)
+            return _wsl_exec("bash", "-lc", 'exec "$@"',
+                             "bash", program, "-case", self._wsl_case, *extra)
         raise ValueError("backend must be native or wsl")
 
     def _status(self, status: str, *, reason: str | None = None):
@@ -253,6 +270,11 @@ exit 127'''
                     self.process = subprocess.Popen(
                         cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                         text=True, errors="replace", bufsize=1,
+                        # The Windows IngeTrazo executable normally runs from
+                        # C:/Program Files; do not inherit that directory.
+                        # The WSL --cd / flag independently guarantees a
+                        # valid Linux cwd before OpenFOAM parses file names.
+                        cwd=str(self.case_dir) if self.backend == "wsl" and _is_windows() else None,
                         start_new_session=(not _is_windows()),
                     )
                     assert self.process.stdout is not None
@@ -273,6 +295,15 @@ exit 127'''
                                 "OpenFOAM startup or its native libraries failed. "
                                 "Verify blockMesh -help inside Ubuntu."
                             )
+                        if code == 1:
+                            output_file = logs / f"{number:02d}_{program}.log"
+                            tail = output_file.read_text(encoding="utf-8", errors="replace")[-6000:]
+                            if "fileName::stripInvalid" in tail:
+                                raise RuntimeError(
+                                    f"{program} failed: OpenFOAM rejected a file/directory name. "
+                                    "GO CFD now starts WSL from Linux /; ensure the "
+                                    "case folder has no spaces. Inspect " + str(output_file)
+                                )
                         raise RuntimeError(f"{program} exited with code {code}; inspect solver_logs")
             self._status("SOLVER_COMPLETED_UNVERIFIED", reason="Mesh and convergence QA not completed")
             return "SOLVER_COMPLETED_UNVERIFIED"

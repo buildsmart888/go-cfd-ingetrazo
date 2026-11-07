@@ -82,36 +82,38 @@ def test_native_windows_actionable_error(monkeypatch, tmp_path):
         SolverRunner(tmp_path, backend="native").preflight()
 
 
-def test_wsl_drive_paths_preserve_slashes(monkeypatch):
+def test_wsl_path_preserves_separator_and_spaces(monkeypatch, tmp_path):
+    """Regression: WSL must not turn C:\\Users\\... into C:Users..."""
     from go_cfd.runner import _windows_path_to_wsl_argument
     monkeypatch.setattr("go_cfd.runner._is_windows", lambda: True)
-    native = r"C:\Users\g_np2\Documents\GO CFD Cases\cube"
+    native = r"C:\Users\g_np2\Documents\GO CFD Cases\cube_20261107"
     assert _windows_path_to_wsl_argument(native) == (
-        "C:/Users/g_np2/Documents/GO CFD Cases/cube"
+        "C:/Users/g_np2/Documents/GO CFD Cases/cube_20261107"
     )
     with pytest.raises(ValueError, match="UNC"):
         _windows_path_to_wsl_argument(r"\\server\share\case")
 
 
-def test_wsl_exec_does_not_strip_path_separators(monkeypatch, tmp_path):
+def test_wsl_preflight_passes_drive_path_without_linux_shell(monkeypatch, tmp_path):
+    """Regression: preflight uses --exec and forward slashes for wslpath."""
     monkeypatch.setattr("go_cfd.runner._is_windows", lambda: True)
     monkeypatch.setattr("go_cfd.runner.shutil.which", lambda _: "wsl.exe")
-    commands = []
+    calls = []
 
     def fake_run(args, **kwargs):
-        commands.append(args)
+        calls.append(args)
         if "GO_CFD_WSL_READY" in str(args):
             return _result(out="GO_CFD_WSL_READY")
         if "wslpath" in args:
-            return _result(out="/mnt/c/Users/g_np2/Documents/GO CFD Cases/cube\n")
+            return _result(out="/mnt/c/Users/g_np2/Documents/GO_CFD_Cases/cube_20261107\n")
         return _result(out="PATH:/usr/bin/blockMesh")
 
     monkeypatch.setattr("go_cfd.runner.subprocess.run", fake_run)
     runner = SolverRunner(tmp_path, backend="wsl")
-    runner.case_dir = r"C:\Users\g_np2\Documents\GO CFD Cases\cube"
+    runner.case_dir = r"C:\Users\g_np2\Documents\GO_CFD_Cases\cube_20261107"
     assert "OpenFOAM blockMesh located" in runner.preflight()
-    assert commands[1] == [
-        "wsl.exe", "--exec", "wslpath", "-u", "-a",
-        "C:/Users/g_np2/Documents/GO CFD Cases/cube",
+    assert calls[1] == [
+        "wsl.exe", "--cd", "/", "--exec", "wslpath", "-u", "-a",
+        "C:/Users/g_np2/Documents/GO_CFD_Cases/cube_20261107",
     ]
-    assert runner._commands("blockMesh", ())[0:2] == ["wsl.exe", "--exec"]
+    assert runner._commands("blockMesh", ())[0:4] == ["wsl.exe", "--cd", "/", "--exec"]

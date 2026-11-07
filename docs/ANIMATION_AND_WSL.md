@@ -118,3 +118,29 @@ This applies to WSL and native Linux launchers and explicit bashrc preflight.
 If a crash remains, inspect `solver_logs/01_blockMesh.log`. Test `blockMesh -help`
 in Ubuntu; success there but failure on a GO CFD case needs inspection of the
 case dictionary or mount. No structural design results are validated by this fix.
+
+## v0.2.3-dev: OpenFOAM invalid fileName / inherited IngeTrazo working directory
+
+After WSL path translation and OpenFOAM startup succeeded, `blockMesh`
+reported `fileName::stripInvalid()` with `/mnt/c/ProgramFiles/IngeTrazo`.
+This is consistent with the GUI process residing under `C:/Program Files`;
+it is **not** the CFD case folder.
+
+All WSL calls now launch as `wsl.exe --cd / --exec ...` to set a safe Linux
+working directory, and solver subprocesses set their Windows cwd to the
+newly generated case directory. It is not necessary to move or reinstall
+IngeTrazo or OpenFOAM to test this patch.
+
+Use a local case root with no whitespace in its path, such as
+`C:/GO_CFD_Cases`, then build a new sample Cube case. OpenFOAM path checks
+are not a substitute for mesh and CFD validation.
+
+From PowerShell:
+
+```powershell
+wsl -d Ubuntu --cd / --exec bash -lc 'pwd'
+wsl -d Ubuntu --cd / --exec bash -lc 'source /usr/lib/openfoam/openfoam2606/etc/bashrc && blockMesh -help'
+```
+
+If `blockMesh` starts reading the dictionary and then fails, inspect the
+case's `solver_logs/01_blockMesh.log`: that is a separate meshing problem.

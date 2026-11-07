@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.3-dev (2026-11-07)
+
+- Fixed OpenFOAM's fatal `fileName::stripInvalid()` after running from IngeTrazo installed under `C:/Program Files`.
+- All Windows WSL preflight and solver subprocesses now use `wsl.exe --cd / --exec` so Linux starts from a whitespace-free cwd.
+- WSL solver launch also sets the Windows subprocess cwd to the generated CFD case folder.
+- Reject CFD case paths containing whitespace early (suggest `C:/GO_CFD_Cases`).
+- Added tests for WSL working directory, case path whitespace and subprocess cwd.
+- Still requires a real OpenFOAM runtime and engineering QA; no design-load validity is claimed.
+
 ## 0.2.2-dev (2026-11-07)
 
 - Fix SIGSEGV/exit 139 caused by sourcing OpenFOAM etc/bashrc with positional arguments still present.

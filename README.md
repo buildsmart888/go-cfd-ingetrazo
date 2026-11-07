@@ -3,7 +3,7 @@
 > **PRELIMINARY SOFTWARE — NOT FOR STRUCTURAL DESIGN.** This repository is
 > an early implementation, not a validated CFD wind-engineering product.
 
-**Version:** `0.2.2-dev` · **Target IngeTrazo:** `v0.6.0` · **Target OpenFOAM:**
+**Version:** `0.2.3-dev` · **Target IngeTrazo:** `v0.6.0` · **Target OpenFOAM:**
 OpenCFD `v2606` (template target, **not yet solver-tested**).
 
 GO CFD connects selected 3D envelope Groups/Components in IngeTrazo to
@@ -28,6 +28,34 @@ case directories.
 - **NEW v0.2:** Windows defaults to WSL2; environment check diagnoses distro
   startup, OpenFOAM availability and Windows/WSL path mapping before solving.
 - Pytest unit tests; CI workflow (live solver/in-app QA separate).
+
+## v0.2.3-dev: OpenFOAM rejects inherited IngeTrazo working directory
+
+After the OpenFOAM v2606 banner, a native exception such as:
+
+```
+fileName::stripInvalid() called for invalid fileName /mnt/c/ProgramFiles/IngeTrazo
+```
+
+is consistent with WSL inheriting a Windows working directory under
+`C:/Program Files/IngeTrazo`. This directory is not the CFD case.
+
+The WSL launcher now uses `wsl.exe --cd / --exec` for all preflight and
+solver stages. Windows also starts solver subprocesses from the CFD case
+folder instead of inheriting the IngeTrazo installation directory.
+
+**How to test:** close IngeTrazo, install the latest source bundle, restart,
+choose `C:/GO_CFD_Cases` (avoid spaces), build a new sample cube case, run
+`Check WSL / OpenFOAM environment` and then `Run OpenFOAM`.
+
+Independent PowerShell check:
+
+```powershell
+wsl -d Ubuntu --cd / --exec bash -lc 'pwd'
+# Expect /
+```
+
+This patch does not change CFD physics or certify solver output.
 
 ## OpenFOAM launch fix (v0.2.2-dev)
 
